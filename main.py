@@ -5,6 +5,18 @@ import random
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
+class WeatherRequest(BaseModel):
+    city: str = Field(min_length=1, max_length=100)
+    day: date | None = None
+
+
+class ForecastRequest(BaseModel):
+    city: str = Field(min_length=1, max_length=100)
+    days: int = Field(default=5, ge=1, le=14)
+    start_date: date | None = None
+
+
+
 app = FastAPI(
     title="Synthetic Weather API",
     description="REST API с синтетическими данными о погоде.",
@@ -57,9 +69,6 @@ def make_weather(city: str, day: date) -> WeatherResponse:
     )
 
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
 
 
 @app.get("/api/v1/weather", response_model=WeatherResponse)
@@ -85,6 +94,30 @@ def get_forecast(
     forecast = [
         make_weather(city, first_day + timedelta(days=offset))
         for offset in range(days)
+    ]
+
+    return ForecastResponse(city=city, forecast=forecast)
+
+
+@app.post("/api/v1/weather", response_model=WeatherResponse)
+def create_weather(request: WeatherRequest):
+    requested_day = request.day or date.today()
+    return make_weather(request.city, requested_day)
+
+
+@app.post("/api/v1/forecast", response_model=ForecastResponse)
+def create_forecast(request: ForecastRequest):
+    city = request.city.strip()
+    if not city:
+        raise HTTPException(
+            status_code=422,
+            detail="Параметр city не должен быть пустым",
+        )
+
+    first_day = request.start_date or date.today()
+    forecast = [
+        make_weather(city, first_day + timedelta(days=offset))
+        for offset in range(request.days)
     ]
 
     return ForecastResponse(city=city, forecast=forecast)
